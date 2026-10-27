@@ -8,6 +8,8 @@ env:
   CARGO_TERM_COLOR: always
   NDK_VERSION: "r27"
   CARGO_NDK_VERSION: "4.1.2"
+  # Ruffle commit pinned in Cargo.lock; ruffle-patches/*.patch are applied on top of it.
+  RUFFLE_REV: "fe6cfc545405b888ebb478ce1c211d63147ca49b"
 
 jobs:
   build:
@@ -16,6 +18,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Fetch Ruffle source and apply AQW/Skua core patches
+        run: |
+          git init -q ../ruffle-src
+          cd ../ruffle-src
+          git remote add origin https://github.com/ruffle-rs/ruffle.git
+          git fetch -q --depth 1 origin "$RUFFLE_REV"
+          git checkout -q FETCH_HEAD
+          for p in "$GITHUB_WORKSPACE"/ruffle-patches/*.patch; do
+            echo "applying $p"
+            git apply -v "$p"
+          done
 
       - name: Install Rust toolchain
         run: |

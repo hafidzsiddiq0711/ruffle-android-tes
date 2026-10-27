@@ -65,3 +65,23 @@ tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"]}
 
 [features]
 jpegxr = ["ruffle_core/jpegxr"]
+
+# Skua PoC: use a local Ruffle checkout (same commit as Cargo.lock) with ruffle-patches/*.patch applied.
+# CI clones it to ../ruffle-src; all Ruffle crates must point there so they stay one set of types.
+[patch."https://github.com/ruffle-rs/ruffle.git"]
+asc = { path = "../ruffle-src/tools/asc" }
+build_playerglobal = { path = "../ruffle-src/core/build_playerglobal" }
+flv-rs = { path = "../ruffle-src/flv" }
+naga-agal = { path = "../ruffle-src/render/naga-agal" }
+naga-pixelbender = { path = "../ruffle-src/render/naga-pixelbender" }
+pixel_bender = { path = "../ruffle-src/render/pixel_bender" }
+ruffle_common = { path = "../ruffle-src/core/common" }
+ruffle_core = { path = "../ruffle-src/core" }
+ruffle_frontend_utils = { path = "../ruffle-src/frontend-utils" }
+ruffle_macros = { path = "../ruffle-src/core/macros" }
+ruffle_render = { path = "../ruffle-src/render" }
+ruffle_render_wgpu = { path = "../ruffle-src/render/wgpu" }
+ruffle_video = { path = "../ruffle-src/video" }
+ruffle_video_software = { path = "../ruffle-src/video/software" }
+ruffle_wstr = { path = "../ruffle-src/wstr" }
+swf = { path = "../ruffle-src/swf" }
