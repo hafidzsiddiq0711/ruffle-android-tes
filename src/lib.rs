@@ -183,11 +183,11 @@ async fn run(app: AndroidApp) {
                             quit = true;
                         }
                         MainEvent::WindowResized { .. } => {
-                            if let Some(player) = playerbox.as_ref() {
+                            // Skua PoC: a resize can arrive while there is no window (app in background).
+                            if let (Some(player), Some(window)) =
+                                (playerbox.as_ref(), native_window.as_ref())
+                            {
                                 let mut player_lock = player.player.lock().unwrap();
-                                let window = native_window
-                                    .as_ref()
-                                    .expect("native_window should be Some for a WindowResized");
                                 log::info!(
                                     "WindowResized: {} x {}",
                                     window.width(),
@@ -376,16 +376,22 @@ async fn run(app: AndroidApp) {
                                 log::info!("MOVIE STARTED");
                             }
                         }
-                        MainEvent::TerminateWindow { .. }  => {
-                            let player = &playerbox.as_ref().unwrap().player;
-                            let mut player_lock = player.lock().unwrap();
-                            player_lock.set_is_playing(false);
+                        MainEvent::TerminateWindow { .. } => {
+                            // Skua PoC: the window is gone. Forget it, so Resume/resize/render don't
+                            // touch the destroyed surface ("wgpu error: Invalid surface" panic);
+                            // InitWindow recreates the surface when we're visible again.
+                            // The movie keeps playing (no rendering) so the bot keeps working in the
+                            // background.
+                            native_window = None;
+                            log::info!("TerminateWindow: rendering paused, movie keeps running");
                         }
                         MainEvent::InputAvailable => {
                             if let Ok(mut inputs) = app.input_events_iter() {
                                 while inputs.next(|input| match input {
                                     InputEvent::MotionEvent(event) => {
-                                        let window = native_window.as_ref().unwrap();
+                                        let Some(window) = native_window.as_ref() else {
+                                            return InputStatus::Unhandled;
+                                        };
                                         let pointer = event.pointer_index();
                                         let pointer = event.pointer_at_index(pointer);
                                         let coords: (i32, i32) = get_loc_in_window(&app);
@@ -579,7 +585,8 @@ async fn run(app: AndroidApp) {
             }
         }
 
-        if needs_redraw {
+        // Skua PoC: only draw while we have a window (surface).
+        if needs_redraw && native_window.is_some() {
             if let Some(player) = playerbox.as_ref() {
                 if let Ok(mut player) = player.player.lock() {
                     player.render();
