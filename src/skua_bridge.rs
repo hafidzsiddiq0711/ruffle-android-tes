@@ -16,6 +16,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
+use std::iter::FromIterator;
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Mutex, OnceLock};
