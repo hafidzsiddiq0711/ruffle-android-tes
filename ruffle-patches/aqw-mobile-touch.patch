@@ -1,0 +1,48 @@
+AQW mobile HUD on Android: report a finger touchscreen; add missing Multitouch getters
+(touch/gesture events unsupported -> movies use mouse events, which Ruffle sends for taps).
+
+diff --git a/core/src/avm2/globals/flash/system/Capabilities.as b/core/src/avm2/globals/flash/system/Capabilities.as
+index db664bca..f88dbde5 100644
+--- a/core/src/avm2/globals/flash/system/Capabilities.as
++++ b/core/src/avm2/globals/flash/system/Capabilities.as
+@@ -144,8 +144,9 @@ package flash.system {
+ 
+         [API("667")]
+         public static function get touchscreenType():String {
+-            stub_getter("flash.system.Capabilities", "touchscreenType");
+-            return "none";
++            // Skua/AQW Android build: report a finger touchscreen so AQW enables its mobile HUD
++            // (Game.swf checks Capabilities.touchscreenType == TouchscreenType.FINGER).
++            return "finger";
+         }
+ 
+         public native static function get version():String;
+diff --git a/core/src/avm2/globals/flash/ui/Multitouch.as b/core/src/avm2/globals/flash/ui/Multitouch.as
+index b1832b6e..42e5636c 100644
+--- a/core/src/avm2/globals/flash/ui/Multitouch.as
++++ b/core/src/avm2/globals/flash/ui/Multitouch.as
+@@ -3,5 +3,24 @@ package flash.ui {
+     public final class Multitouch {
+         // FIXME - implement a setter and gett
+         public static var inputMode:String = MultitouchInputMode.GESTURE;
++
++        // Skua/AQW Android build: these getters didn't exist (ReferenceError when a movie reads
++        // them). Ruffle doesn't dispatch TouchEvent/GestureEvent, so report them as unsupported
++        // and movies fall back to mouse events, which Ruffle does send for taps.
++        public static function get maxTouchPoints():int {
++            return 5;
++        }
++
++        public static function get supportsTouchEvents():Boolean {
++            return false;
++        }
++
++        public static function get supportsGestureEvents():Boolean {
++            return false;
++        }
++
++        public static function get supportedGestures():Vector.<String> {
++            return null;
++        }
+     }
+ }
