@@ -3,6 +3,7 @@ mod custom_event;
 mod java;
 mod keycodes;
 mod navigator;
+mod skua_bridge;
 mod trace;
 
 use custom_event::RuffleEvent;
@@ -159,6 +160,9 @@ async fn run(app: AndroidApp) {
             Ok((trace_output, android_storage_dir))
         })
         .expect("JNI calls on the main thread must succeed");
+
+    // Skua bridge: lets an external controller drive the movie's ExternalInterface.
+    skua_bridge::start(sender.clone());
 
     while !quit {
         let mut needs_redraw = false;
@@ -335,6 +339,9 @@ async fn run(app: AndroidApp) {
                                             .with_video(
                                                 ruffle_video_software::backend::SoftwareVideoBackend::new(),
                                             )
+                                            .with_external_interface(Box::new(
+                                                skua_bridge::SkuaExternalInterface,
+                                            ))
                                         .build(),
                                     }
                                 );
@@ -471,65 +478,85 @@ async fn run(app: AndroidApp) {
             },
         );
 
-        match receiver.try_recv() {
-            Err(_) => {}
-            Ok(RuffleEvent::TaskPoll(task)) => {
-                // Only run the task if it matches our current player;
-                // otherwise it is stale, and should be cancelled (which
-                // happens implicitly on drop).
-                if let Some(player) = playerbox.as_ref() {
-                    if *task.0.metadata() == player.id {
-                        task.0.run();
-                    }
-                }
-            }
-            Ok(RuffleEvent::VirtualKeyEvent {
-                down,
-                key_descriptor,
-            }) => {
-                if let Some(player) = playerbox.as_ref() {
-                    let event = if down {
-                        PlayerEvent::KeyDown {
-                            key: key_descriptor,
-                        }
-                    } else {
-                        PlayerEvent::KeyUp {
-                            key: key_descriptor,
-                        }
+        // Drain several queued events per iteration (upstream handles one), so a
+        // burst of Skua bridge calls doesn't wait a frame each.
+        for _ in 0..256 {
+            match receiver.try_recv() {
+                Err(_) => break,
+                Ok(RuffleEvent::ExternalCall {
+                    id,
+                    name,
+                    args,
+                    reply,
+                }) => {
+                    let result = match playerbox.as_ref() {
+                        Some(player) => player
+                            .player
+                            .lock()
+                            .unwrap()
+                            .call_internal_interface(&name, args),
+                        None => ruffle_core::external::Value::Null,
                     };
-                    player.player.lock().unwrap().handle_event(event);
-
-                    if down {
-                        // TODO: Add shift/capslock and pass in uppercase characters accordingly
-                        if let LogicalKey::Character(c) = key_descriptor.logical_key {
-                            let event = PlayerEvent::TextInput { codepoint: c };
-                            player.player.lock().unwrap().handle_event(event);
+                    let _ = reply.send(skua_bridge::response(id, &result));
+                }
+                Ok(RuffleEvent::TaskPoll(task)) => {
+                    // Only run the task if it matches our current player;
+                    // otherwise it is stale, and should be cancelled (which
+                    // happens implicitly on drop).
+                    if let Some(player) = playerbox.as_ref() {
+                        if *task.0.metadata() == player.id {
+                            task.0.run();
                         }
                     }
                 }
-            }
-            Ok(RuffleEvent::RunContextMenuCallback(index)) => {
-                if let Some(player) = playerbox.as_ref() {
-                    player
-                        .player
-                        .lock()
-                        .unwrap()
-                        .run_context_menu_callback(index);
+                Ok(RuffleEvent::VirtualKeyEvent {
+                    down,
+                    key_descriptor,
+                }) => {
+                    if let Some(player) = playerbox.as_ref() {
+                        let event = if down {
+                            PlayerEvent::KeyDown {
+                                key: key_descriptor,
+                            }
+                        } else {
+                            PlayerEvent::KeyUp {
+                                key: key_descriptor,
+                            }
+                        };
+                        player.player.lock().unwrap().handle_event(event);
+
+                        if down {
+                            // TODO: Add shift/capslock and pass in uppercase characters accordingly
+                            if let LogicalKey::Character(c) = key_descriptor.logical_key {
+                                let event = PlayerEvent::TextInput { codepoint: c };
+                                player.player.lock().unwrap().handle_event(event);
+                            }
+                        }
+                    }
                 }
-            }
-            Ok(RuffleEvent::ClearContextMenu) => {
-                if let Some(player) = playerbox.as_ref() {
-                    player.player.lock().unwrap().clear_custom_menu_items();
+                Ok(RuffleEvent::RunContextMenuCallback(index)) => {
+                    if let Some(player) = playerbox.as_ref() {
+                        player
+                            .player
+                            .lock()
+                            .unwrap()
+                            .run_context_menu_callback(index);
+                    }
                 }
-            }
-            Ok(RuffleEvent::RequestContextMenu) => {
-                if let Some(player) = playerbox.as_ref() {
-                    log::warn!("preparing context menu!");
-                    let items = player.player.lock().unwrap().prepare_context_menu();
-                    with_activity(&app, |env, activity| {
-                        JavaInterface::show_context_menu(env, activity, &items)
-                    })
-                    .unwrap();
+                Ok(RuffleEvent::ClearContextMenu) => {
+                    if let Some(player) = playerbox.as_ref() {
+                        player.player.lock().unwrap().clear_custom_menu_items();
+                    }
+                }
+                Ok(RuffleEvent::RequestContextMenu) => {
+                    if let Some(player) = playerbox.as_ref() {
+                        log::warn!("preparing context menu!");
+                        let items = player.player.lock().unwrap().prepare_context_menu();
+                        with_activity(&app, |env, activity| {
+                            JavaInterface::show_context_menu(env, activity, &items)
+                        })
+                        .unwrap();
+                    }
                 }
             }
         }

@@ -1,6 +1,8 @@
 //! Custom event type for Ruffle on Android
 
 use ruffle_core::events::KeyDescriptor;
+use ruffle_core::external::Value as ExternalValue;
+use std::sync::mpsc::Sender;
 
 use crate::PlayerRunnable;
 
@@ -15,4 +17,12 @@ pub enum RuffleEvent {
     RunContextMenuCallback(usize),
     ClearContextMenu,
     RequestContextMenu,
+    /// Skua bridge: call an ExternalInterface callback registered by the movie.
+    /// The JSON response line is sent through `reply`.
+    ExternalCall {
+        id: u64,
+        name: String,
+        args: Vec<ExternalValue>,
+        reply: Sender<String>,
+    },
 }

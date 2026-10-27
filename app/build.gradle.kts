@@ -22,7 +22,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "rs.ruffle"
+        applicationId = "rs.ruffle.skua"
         minSdk = 26
         targetSdk = 35
         versionCode = 261026

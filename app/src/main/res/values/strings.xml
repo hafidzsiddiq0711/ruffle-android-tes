@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Ruffle</string>
+    <string name="app_name">Ruffle Skua PoC</string>
     <string name="logo_description">Ruffle Logo</string>
     <string name="or">or</string>
     <string name="open_url">Open URL</string>

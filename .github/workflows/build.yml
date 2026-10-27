@@ -1,10 +1,7 @@
 name: Build
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # Skua PoC fork: upstream full build only on demand (skua-poc.yml builds the APK).
   workflow_dispatch:
 
 env:

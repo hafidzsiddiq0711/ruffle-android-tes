@@ -1,0 +1,80 @@
+name: Skua PoC APK (arm64)
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: "r27"
+  CARGO_NDK_VERSION: "4.1.2"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        run: |
+          rustup show
+          rustup target add aarch64-linux-android
+
+      - name: Cache Cargo output
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: skua-poc-arm64
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk@${{ env.CARGO_NDK_VERSION }} --locked
+
+      - name: Clean up preinstalled NDKs
+        run: |
+          rm -rf $ANDROID_NDK_HOME
+          rm -rf $ANDROID_NDK_LATEST_HOME
+
+      - name: Set up NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          link-to-sdk: true
+
+      - name: Build native lib (arm64-v8a)
+        run: |
+          unset ANDROID_SDK_ROOT
+          cargo ndk --target arm64-v8a --platform 26 -o app/src/main/jniLibs build --release
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+
+      - name: Generate dummy keystore
+        run: |
+          keytool -genkeypair -v -keystore app/androidkey.jks -alias dummy_alias \
+            -storepass dummy_pass -keypass dummy_pass -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=skua-poc, OU=poc, O=poc, L=poc, S=poc, C=ID"
+
+      - name: Build release APK
+        env:
+          SIGNING_KEY_ALIAS: dummy_alias
+          SIGNING_KEY_PASSWORD: dummy_pass
+          SIGNING_STORE_PASSWORD: dummy_pass
+        run: ./gradlew assembleRelease -PABI_FILTERS=arm64-v8a
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ruffle-skua-poc-apk
+          path: app/build/outputs/apk/release/*.apk

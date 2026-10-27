@@ -57,6 +57,8 @@ backtrace = "0.3.76"
 async-task = "4.7.1"
 
 url = "2.5.2"
+# Skua bridge (PoC) wire format.
+serde_json = "1.0"
 webbrowser = "1.2.4"
 
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"]}

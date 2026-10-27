@@ -17,13 +17,15 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.PopupMenu
+import android.widget.Toast
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.androidgamesdk.GameActivity
-import java.io.DataInputStream
 import java.io.File
 import java.io.IOException
 
@@ -39,10 +41,8 @@ class PlayerActivity : GameActivity() {
                         if (inputStream == null) {
                             return null
                         }
-                        val bytes = ByteArray(inputStream.available())
-                        val dataInputStream = DataInputStream(inputStream)
-                        dataInputStream.readFully(bytes)
-                        return bytes
+                        // available() isn't guaranteed to be the full size for content URIs.
+                        return inputStream.readBytes()
                     }
                 } catch (ignored: IOException) {
                 }
@@ -247,6 +247,25 @@ class PlayerActivity : GameActivity() {
         requestNoStatusBarFeature()
         supportActionBar?.hide()
         super.onCreate(savedInstanceState)
+        // Skua bridge PoC: the player pauses when the screen turns off, so keep it on,
+        // and show where the controller should connect.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        Toast.makeText(
+            this,
+            "Skua bridge: ${localIpAddresses().ifEmpty { listOf("<no wifi ip>") }.joinToString(", ") { "$it:5150" }}",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun localIpAddresses(): List<String> = try {
+        NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList() }
+            .filterIsInstance<Inet4Address>()
+            .map { it.hostAddress ?: "" }
+            .filter { it.isNotEmpty() }
+    } catch (e: Exception) {
+        emptyList()
     }
 
     // Used by Rust
